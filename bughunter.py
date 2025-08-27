@@ -6,6 +6,13 @@ import json
 def get_api_key():
     return input("Zadejte API klíč od Grok: ")
 
+def read_readme():
+    readme_path = os.path.join(os.getcwd(), "README.md")
+    if os.path.exists(readme_path):
+        with open(readme_path, 'r', encoding='utf-8') as readme_file:
+            return readme_file.read()
+    return "Žádný README.md soubor nenalezen."
+
 def analyze_code_with_grok(api_key, code, filename):
     url = "https://api.x.ai/v1/chat/completions"
     headers = {
@@ -31,17 +38,22 @@ def analyze_code_with_grok(api_key, code, filename):
         print(f"Chyba při volání API pro soubor {filename}: {e}")
         return "Chyba při analýze."
 
-def fix_code_with_grok(api_key, code, bugs, filename):
+def fix_code_with_grok(api_key, code, bugs, filename, readme_content):
     url = "https://api.x.ai/v1/chat/completions"
     headers = {
         "Authorization": f"Bearer {api_key}",
         "Content-Type": "application/json"
     }
-    prompt = f"Oprav chyby v tomto Python kódu ze souboru '{filename}' na základě těchto nalezených chyb:\n{bugs}\nPůvodní kód:\n```python\n{code}\n```\nVrát opravený kód v bloku ```python\nopravný kód\n```"
+    prompt = (
+        f"Oprav chyby v tomto Python kódu ze souboru '{filename}' na základě těchto nalezených chyb:\n{bugs}\n"
+        f"Při opravě zohledni dokumentaci projektu z README.md:\n{readme_content}\n"
+        f"Původní kód:\n```python\n{code}\n```\n"
+        f"Vrát opravený kód v bloku ```python\nopravný kód\n```, který zachovává zamýšlenou funkcionalitu popsanou v README."
+    )
     data = {
         "model": "grok-3",
         "messages": [
-            {"role": "system", "content": "Jsi expert na opravu chyb v Python kódu."},
+            {"role": "system", "content": "Jsi expert na opravu chyb v Python kódu s ohledem na dokumentaci projektu."},
             {"role": "user", "content": prompt}
         ],
         "temperature": 0.5,
@@ -61,7 +73,7 @@ def fix_code_with_grok(api_key, code, bugs, filename):
 
 def main():
     api_key = get_api_key()
-    print("Inicializace úspěšná. Začínám analýzu chyb v Python souborech v aktuální složce.")
+    print("Inicializace úspěšná. Začínám analýzu{chyb v Python souborech v aktuální složce.")
 
     current_dir = os.getcwd()
     bugs_content = "# Nalezené chyby\n\n"
@@ -92,7 +104,8 @@ def main():
             print("Neopravuji chyby. Program končí.")
             sys.exit(0)
         elif choice == '1':
-            print("Začínám opravu chyb.")
+            print("Načítám dokumentaci z README.md a začínám opravu chyb.")
+            readme_content = read_readme()
             for filename in python_files:
                 with open(filename, 'r', encoding='utf-8') as file:
                     code = file.read()
@@ -104,11 +117,11 @@ def main():
                         bugs = bugs_data[start:end].strip()
                     else:
                         bugs = ""
-                fixed_code = fix_code_with_grok(api_key, code, bugs, filename)
+                fixed_code = fix_code_with_grok(api_key, code, bugs, filename, readme_content)
                 if fixed_code:
                     with open(filename, 'w', encoding='utf-8') as file:
                         file.write(fixed_code)
-                    print(f"Soubor {filename} byl opraven.")
+                    print(f"Soubor {filename} byl opraven s ohledem na dokumentaci.")
                 else:
                     print(f"Nepodařilo se opravit soubor: {filename}")
             print("Oprava dokončena.")
